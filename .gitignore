@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environment
+venv/
+.venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data files (large TSVs - download separately)
+data/fakeddit/*.tsv
+data/nela/*.db
+data/nela/*.json
+data/nela/articles/
+
+# Generated results (re-generate with pipeline)
+results/
+
+# Model checkpoints
+results/bert_model/
+
+# Jupyter
+.ipynb_checkpoints/
+notebooks/.ipynb_checkpoints/
+
+# Distribution
+dist/
+build/
+*.egg-info/
