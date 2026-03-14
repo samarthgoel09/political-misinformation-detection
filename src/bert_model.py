@@ -17,7 +17,6 @@ from tqdm import tqdm
 
 
 class TextDataset(Dataset):
-    """PyTorch Dataset for text classification."""
 
     def __init__(self, texts, labels, tokenizer, max_length=128):
         self.texts = texts
@@ -48,7 +47,6 @@ class TextDataset(Dataset):
 
 
 class BertClassifier:
-    """DistilBERT-based text classifier."""
 
     def __init__(
         self,
@@ -67,7 +65,6 @@ class BertClassifier:
         self.learning_rate = learning_rate
         self.num_epochs = num_epochs
 
-        # Auto-detect device
         if device is None:
             if torch.cuda.is_available():
                 self.device = torch.device("cuda")
@@ -78,7 +75,6 @@ class BertClassifier:
         else:
             self.device = torch.device(device)
 
-        # Load tokenizer and model
         print(f"Loading {model_name}...")
         self.tokenizer = DistilBertTokenizer.from_pretrained(model_name)
         self.model = DistilBertForSequenceClassification.from_pretrained(
@@ -87,7 +83,6 @@ class BertClassifier:
         self.model.to(self.device)
 
     def _create_dataloader(self, texts, labels, shuffle=True):
-        """Create a DataLoader from texts and labels."""
         dataset = TextDataset(
             texts, labels, self.tokenizer, self.max_length
         )
@@ -114,7 +109,6 @@ class BertClassifier:
         """
         train_loader = self._create_dataloader(X_train, y_train, shuffle=True)
 
-        # Optimizer and scheduler
         optimizer = AdamW(
             self.model.parameters(),
             lr=self.learning_rate,
@@ -133,7 +127,6 @@ class BertClassifier:
         start_time = time.time()
 
         for epoch in range(self.num_epochs):
-            # Training phase
             self.model.train()
             total_loss = 0
             progress = tqdm(
@@ -169,7 +162,6 @@ class BertClassifier:
             history["train_loss"].append(avg_loss)
             print(f"  Epoch {epoch + 1} - Train Loss: {avg_loss:.4f}")
 
-            # Validation phase
             if X_val is not None and y_val is not None:
                 val_loss, val_acc = self._evaluate(X_val, y_val)
                 history["val_loss"].append(val_loss)
@@ -183,7 +175,6 @@ class BertClassifier:
         return history
 
     def _evaluate(self, X, y):
-        """Evaluate the model on given data."""
         self.model.eval()
         loader = self._create_dataloader(X, y, shuffle=False)
 
@@ -223,7 +214,6 @@ class BertClassifier:
             Array of predicted label IDs.
         """
         self.model.eval()
-        # Create dummy labels for DataLoader
         dummy_labels = np.zeros(len(X), dtype=int)
         loader = self._create_dataloader(X, dummy_labels, shuffle=False)
 
