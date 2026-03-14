@@ -1,22 +1,16 @@
 # Progress Report: Political Misinformation Detection
 
-**Course:** [Your Course Name]
-**Student:** Samarth Goel
-**Date:** March 12, 2026
+**Course:** CS 5100 — Foundations of Artificial Intelligence  
+**Student:** Samarth Goel  
+**Date:** March 14, 2026
 
 ---
 
 ## What Has Been Achieved
 
-We have built and tested a complete supervised learning pipeline for detecting political misinformation in text-based content. The system has been evaluated on real data from the Fakeddit dataset.
+We have built a complete supervised learning pipeline for classifying political misinformation using the Fakeddit dataset. The system includes text preprocessing (URL/HTML removal, stopword removal, lemmatization via NLTK), TF-IDF feature extraction with bigram support, and stratified train/validation/test splitting. A synthetic data generator was also built for rapid development testing.
 
-1. **Data Infrastructure**: Built data loading scripts for both the Fakeddit and NELA-GT datasets, including political content filtering (by subreddit and keyword matching). A synthetic data generator was also created for development testing, mirroring Fakeddit's 6-way label structure.
-
-2. **Text Preprocessing Pipeline**: Implemented NLP preprocessing including text cleaning (URL/HTML removal, special character stripping), stopword removal, and lemmatization using NLTK.
-
-3. **Feature Extraction**: Built a TF-IDF vectorization module with configurable vocabulary size and bigram support, with stratified train/validation/test splitting.
-
-4. **Model Training and Evaluation**: Trained and compared four classifiers on 3,492 politically-filtered Fakeddit samples (binary scheme):
+Four classifiers were trained and evaluated on 3,492 politically-filtered Fakeddit samples using the binary label scheme:
 
 | Model | Accuracy | F1 (Macro) | Precision (Macro) | Recall (Macro) |
 |-------|----------|------------|-------------------|----------------|
@@ -25,24 +19,22 @@ We have built and tested a complete supervised learning pipeline for detecting p
 | Linear SVM | 71.1% | 0.637 | 0.701 | 0.634 |
 | **DistilBERT** | **76.7%** | **0.750** | **0.747** | **0.753** |
 
-DistilBERT outperformed all baselines by ~6% accuracy and ~12 points in F1-score, with notably more balanced precision and recall on the "fake" class.
+DistilBERT outperformed all TF-IDF baselines by approximately 6 percentage points in accuracy and 12 points in macro F1-score. Data loading scripts for NELA-GT have also been written but not yet run on the full dataset.
 
 ## Immediate Next Steps
 
-- Experiment with GPU-accelerated BERT training for faster iteration and larger sample sizes
-- Acquire and integrate the NELA-GT dataset for source-credibility-based classification
-- Address class imbalance (the 6-way scheme showed models struggling on minority classes like satire and imposter content, consistent with findings from the Fakeddit literature)
-- Tune hyperparameters to improve baseline model performance
+- Expand evaluation to the 6-way label scheme (our primary classification target) and address class imbalance through oversampling and class weighting
+- Acquire and process the NELA-GT dataset for source-credibility-based classification
+- Tune hyperparameters across all models, particularly DistilBERT with GPU-accelerated training
 
 ## Challenges and Adjustments
 
-- **Class imbalance**: In the 6-way classification, minority classes (e.g., imposter content: 40 samples, misleading content: 25 samples in test) showed 0% recall for baseline models. Binary classification produced more balanced results.
-- **Satire detection**: As predicted by the Fakeddit paper, satire remains one of the hardest categories to classify, with the 3-way scheme showing only 3–47% recall depending on the model.
-- **Scope**: As planned, we focus exclusively on text-based models without image data, keeping the project manageable while producing meaningful results.
+**Class imbalance** is the most significant challenge. Initial 6-way experiments showed 0% recall on minority classes (e.g., imposter and misleading content), so we began with binary classification to validate the pipeline. Satire detection remains difficult even in the 3-way scheme (3–47% recall), consistent with the Fakeddit paper's findings. Our scope remains text-only as planned.
 
-## Overall Plan (Next Month)
+## Plan for the Next Month
 
-1. **Week 1**: Increase training data size, run experiments with class balancing techniques (oversampling, class weights)
-2. **Week 2**: Integrate NELA-GT dataset, compare model performance across both datasets
-3. **Week 3**: GPU-accelerated BERT training on larger subsets, error analysis on misclassified samples
-4. **Week 4**: Complete bias/ethical implications analysis, finalize visualizations, write final report
+**Weeks 1–2:** Scale to 6-way classification with class balancing techniques; integrate NELA-GT.  
+**Week 3:** GPU-accelerated BERT training on larger subsets; error analysis on misclassified samples.  
+**Week 4:** Bias and ethical implications analysis; final visualizations and report.
+
+**Code:** [github.com/samarthgoel09/political-misinformation-detection](https://github.com/samarthgoel09/political-misinformation-detection)

@@ -73,8 +73,9 @@ def extract_tfidf_features(
     print(f"  Val:   {X_val_tfidf.shape}")
     print(f"  Test:  {X_test_tfidf.shape}")
 
-    # Get unique labels  
-    unique_labels = sorted(set(label_names))
+    # Get unique labels ordered by label_id (NOT alphabetically)
+    id_to_label = df.drop_duplicates("label_id").set_index("label_id")["label"].to_dict()
+    unique_labels = [id_to_label[i] for i in range(len(id_to_label))]
 
     return {
         "X_train": X_train_tfidf,

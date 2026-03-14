@@ -128,7 +128,8 @@ def run_bert_pipeline(df, args):
     # Use raw text (BERT has its own tokenizer)
     texts = df["text"].values
     labels = df["label_id"].values
-    label_names = sorted(df["label"].unique())
+    id_to_label = df.drop_duplicates("label_id").set_index("label_id")["label"].to_dict()
+    label_names = [id_to_label[i] for i in range(len(id_to_label))]
     num_labels = len(label_names)
 
     # Split data
