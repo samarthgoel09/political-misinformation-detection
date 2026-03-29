@@ -19,11 +19,19 @@ env/
 .DS_Store
 Thumbs.db
 
-# Data files (large TSVs - download separately)
+# Data files (large files - download separately)
 data/fakeddit/*.tsv
 data/nela/*.db
 data/nela/*.json
 data/nela/articles/
+data/*.csv
+data/liar/
+
+# Claude Code internal
+.claude/
+
+# Word documents (use .md version instead)
+*.docx
 
 # Generated results (re-generate with pipeline)
 results/

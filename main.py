@@ -25,6 +25,8 @@ from src.evaluate import (
     plot_model_comparison,
     save_metrics_csv,
 )
+from src.error_analysis import run_error_analysis, run_bias_analysis
+from src.tuning import tune_all_models
 
 
 def load_data(args):
@@ -69,6 +71,13 @@ def load_data(args):
         if args.dataset == "nela":
             return nela_df
 
+    if args.dataset == "liar":
+        from data.download_liar import load_liar
+        return load_liar(
+            label_scheme=args.label_scheme,
+            max_samples=args.n_samples,
+        )
+
     if args.dataset == "both":
         import pandas as pd
         combined = pd.concat([df, nela_df], ignore_index=True)
@@ -95,11 +104,16 @@ def run_baseline_pipeline(df, args):
         df,
         max_features=args.max_features,
         ngram_range=(1, 2),
+        use_smote=args.use_smote,
     )
 
-    # Train models
-    print("\n--- Training Models ---")
-    trained_models = train_all_models(features["X_train"], features["y_train"])
+    # Train models (with optional hyperparameter tuning)
+    if args.tune:
+        trained_models = tune_all_models(features["X_train"], features["y_train"])
+    else:
+        print("\n--- Training Models ---")
+        class_weight = None if args.no_class_weight else "balanced"
+        trained_models = train_all_models(features["X_train"], features["y_train"], class_weight=class_weight)
 
     # Evaluate
     print("\n--- Evaluation ---")
@@ -111,6 +125,29 @@ def run_baseline_pipeline(df, args):
         label_names=label_names,
         results_dir=args.results_dir,
     )
+
+    # Error analysis
+    if args.error_analysis:
+        print("\n--- Error Analysis ---")
+        for model_name, model_info in trained_models.items():
+            y_pred = model_info["model"].predict(features["X_test"])
+            run_error_analysis(
+                texts=features["X_test_raw"],
+                y_true=features["y_test"],
+                y_pred=y_pred,
+                label_names=label_names,
+                model_name=model_name,
+                results_dir=args.results_dir,
+            )
+
+    # Bias analysis
+    if args.bias_analysis:
+        last_model_name = list(trained_models.keys())[-1]
+        y_pred = trained_models[last_model_name]["model"].predict(features["X_test"])
+        run_bias_analysis(
+            features["y_train"], features["y_test"], y_pred,
+            features["X_test_raw"], label_names, args.results_dir,
+        )
 
     return all_metrics
 
@@ -126,8 +163,8 @@ def run_bert_pipeline(df, args):
     import numpy as np
 
     # Use raw text (BERT has its own tokenizer)
-    texts = df["text"].values
-    labels = df["label_id"].values
+    texts = df["text"].to_numpy(dtype=str)
+    labels = df["label_id"].to_numpy(dtype=int)
     id_to_label = df.drop_duplicates("label_id").set_index("label_id")["label"].to_dict()
     label_names = [id_to_label[i] for i in range(len(id_to_label))]
     num_labels = len(label_names)
@@ -158,6 +195,7 @@ def run_bert_pipeline(df, args):
         batch_size=args.bert_batch_size,
         num_epochs=args.bert_epochs,
         max_length=args.bert_max_length,
+        use_class_weights=not args.bert_no_class_weight,
     )
 
     history = bert.train(X_train, y_train, X_val, y_val)
@@ -184,6 +222,25 @@ def run_bert_pipeline(df, args):
     # Save model
     bert.save(os.path.join(args.results_dir, "bert_model"))
 
+    # Error analysis for BERT
+    if args.error_analysis:
+        print("\n--- BERT Error Analysis ---")
+        run_error_analysis(
+            texts=X_test,
+            y_true=y_test,
+            y_pred=y_pred,
+            label_names=label_names,
+            model_name="DistilBERT",
+            results_dir=args.results_dir,
+        )
+
+    # Bias analysis for BERT
+    if args.bias_analysis:
+        run_bias_analysis(
+            y_train, y_test, y_pred,
+            X_test, label_names, args.results_dir,
+        )
+
     return {"DistilBERT": metrics}
 
 
@@ -196,7 +253,7 @@ def main():
     parser.add_argument("--use-sample-data", action="store_true",
                         help="Use synthetic sample data for testing")
     parser.add_argument("--dataset", type=str, default="fakeddit",
-                        choices=["fakeddit", "nela", "both"],
+                        choices=["fakeddit", "nela", "liar", "both"],
                         help="Which dataset to use")
     parser.add_argument("--fakeddit-dir", type=str, default="data/fakeddit",
                         help="Path to Fakeddit data directory")
@@ -211,6 +268,12 @@ def main():
     # Feature arguments
     parser.add_argument("--max-features", type=int, default=10000,
                         help="Maximum TF-IDF vocabulary size")
+    parser.add_argument("--use-smote", action="store_true",
+                        help="Apply SMOTE oversampling to training set (requires imbalanced-learn)")
+    parser.add_argument("--no-class-weight", action="store_true",
+                        help="Disable class_weight='balanced' in LR and SVM")
+    parser.add_argument("--tune", action="store_true",
+                        help="Run hyperparameter grid search instead of default training")
 
     # BERT arguments
     parser.add_argument("--use-bert", action="store_true",
@@ -223,10 +286,16 @@ def main():
                         help="BERT max token length")
     parser.add_argument("--bert-max-samples", type=int, default=5000,
                         help="Max samples for BERT training")
+    parser.add_argument("--bert-no-class-weight", action="store_true",
+                        help="Disable class weighting in BERT loss (not recommended for 6-way)")
 
     # Output arguments
     parser.add_argument("--results-dir", type=str, default="results",
                         help="Directory to save results")
+    parser.add_argument("--error-analysis", action="store_true",
+                        help="Run error analysis on misclassified samples after evaluation")
+    parser.add_argument("--bias-analysis", action="store_true",
+                        help="Run bias and ethical implications analysis")
 
     args = parser.parse_args()
 
@@ -239,7 +308,12 @@ def main():
     print(f"  Dataset: {'sample' if args.use_sample_data else args.dataset}")
     print(f"  Label scheme: {args.label_scheme}")
     print(f"  Samples: {args.n_samples}")
+    print(f"  SMOTE: {'Yes' if args.use_smote else 'No'}")
+    print(f"  Tuning: {'Yes' if args.tune else 'No'}")
     print(f"  BERT: {'Yes' if args.use_bert else 'No'}")
+    print(f"  Class weights: {'Off' if args.no_class_weight else 'balanced'}")
+    print(f"  Error Analysis: {'Yes' if args.error_analysis else 'No'}")
+    print(f"  Bias Analysis: {'Yes' if args.bias_analysis else 'No'}")
     print("=" * 60)
 
     # Load data

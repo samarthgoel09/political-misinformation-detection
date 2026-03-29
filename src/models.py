@@ -11,9 +11,13 @@ from sklearn.svm import LinearSVC
 from sklearn.calibration import CalibratedClassifierCV
 
 
-def get_models() -> dict:
+def get_models(class_weight: str = "balanced") -> dict:
     """
     Return a dictionary of baseline models to train.
+
+    Args:
+        class_weight: Weighting scheme for imbalanced classes. Use 'balanced'
+            for 6-way classification, or None to disable.
 
     Returns:
         Dictionary mapping model name to sklearn estimator.
@@ -25,19 +29,28 @@ def get_models() -> dict:
             solver="lbfgs",
             random_state=42,
             n_jobs=-1,
+            class_weight=class_weight,
         ),
         "Multinomial Naive Bayes": MultinomialNB(
             alpha=1.0,
+            # MultinomialNB does not support class_weight; handle via sample_weight at fit time
         ),
         "Linear SVM": CalibratedClassifierCV(
             LinearSVC(
                 max_iter=2000,
                 C=1.0,
                 random_state=42,
+                class_weight=class_weight,
             ),
             cv=3,
         ),
     }
+
+
+def _compute_sample_weights(y_train: np.ndarray) -> np.ndarray:
+    """Compute per-sample weights inversely proportional to class frequency."""
+    from sklearn.utils.class_weight import compute_sample_weight
+    return compute_sample_weight("balanced", y_train)
 
 
 def train_model(model, X_train, y_train, model_name: str = "Model"):
@@ -55,24 +68,32 @@ def train_model(model, X_train, y_train, model_name: str = "Model"):
     """
     print(f"\nTraining {model_name}...")
     start = time.time()
-    model.fit(X_train, y_train)
+
+    # MultinomialNB doesn't support class_weight — use sample_weight instead
+    if isinstance(model, MultinomialNB):
+        sample_weights = _compute_sample_weights(y_train)
+        model.fit(X_train, y_train, sample_weight=sample_weights)
+    else:
+        model.fit(X_train, y_train)
+
     train_time = time.time() - start
     print(f"  Training time: {train_time:.2f}s")
     return model, train_time
 
 
-def train_all_models(X_train, y_train) -> dict:
+def train_all_models(X_train, y_train, class_weight: str = "balanced") -> dict:
     """
     Train all baseline models.
 
     Args:
         X_train: Training feature matrix (TF-IDF).
         y_train: Training labels.
+        class_weight: Weighting scheme for imbalanced classes ('balanced' or None).
 
     Returns:
         Dictionary mapping model name to (trained model, training time).
     """
-    models = get_models()
+    models = get_models(class_weight=class_weight)
     results = {}
 
     for name, model in models.items():
