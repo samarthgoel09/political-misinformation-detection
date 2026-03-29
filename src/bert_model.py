@@ -6,6 +6,7 @@ Uses HuggingFace transformers for tokenization and model training.
 import time
 import numpy as np
 import torch
+import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 from transformers import (
     DistilBertTokenizer,
@@ -13,6 +14,7 @@ from transformers import (
     get_linear_schedule_with_warmup,
 )
 from torch.optim import AdamW
+from sklearn.utils.class_weight import compute_class_weight
 from tqdm import tqdm
 
 
@@ -57,6 +59,7 @@ class BertClassifier:
         learning_rate: float = 2e-5,
         num_epochs: int = 3,
         device: str = None,
+        use_class_weights: bool = True,
     ):
         self.num_labels = num_labels
         self.model_name = model_name
@@ -64,6 +67,7 @@ class BertClassifier:
         self.batch_size = batch_size
         self.learning_rate = learning_rate
         self.num_epochs = num_epochs
+        self.use_class_weights = use_class_weights
 
         if device is None:
             if torch.cuda.is_available():
@@ -109,6 +113,16 @@ class BertClassifier:
         """
         train_loader = self._create_dataloader(X_train, y_train, shuffle=True)
 
+        # Build weighted loss to counter class imbalance
+        if self.use_class_weights:
+            classes = np.arange(self.num_labels)
+            weights = compute_class_weight("balanced", classes=classes, y=y_train)
+            weight_tensor = torch.tensor(weights, dtype=torch.float).to(self.device)
+            print(f"  Class weights: { {i: round(w, 3) for i, w in enumerate(weights)} }")
+            loss_fn = nn.CrossEntropyLoss(weight=weight_tensor)
+        else:
+            loss_fn = nn.CrossEntropyLoss()
+
         optimizer = AdamW(
             self.model.parameters(),
             lr=self.learning_rate,
@@ -145,10 +159,9 @@ class BertClassifier:
                 outputs = self.model(
                     input_ids=input_ids,
                     attention_mask=attention_mask,
-                    labels=labels,
                 )
 
-                loss = outputs.loss
+                loss = loss_fn(outputs.logits, labels)
                 total_loss += loss.item()
 
                 loss.backward()
