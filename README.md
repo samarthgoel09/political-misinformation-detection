@@ -14,7 +14,7 @@ This project classifies text as credible or misleading using linguistic and stru
 
 | Dataset | Source | Labels | Setup |
 |---------|--------|--------|-------|
-| [Fakeddit](https://github.com/entitize/Fakeddit) | Reddit posts (1M+ samples) | 6-way: true, satire, misleading, imposter, false connection, manipulated | Included in `data/fakeddit/` |
+| [Fakeddit](https://github.com/entitize/Fakeddit) | Reddit posts (1M+ samples) | 6-way: true, satire, misleading, imposter, false connection, manipulated | Manual download → `data/fakeddit/` (see instructions below) |
 | [NELA-GT](https://doi.org/10.7910/DVN/CHMUYZ) | News articles with source credibility ratings | 3-way: reliable, mixed, unreliable | Included in `data/nela/` |
 | [LIAR](https://www.cs.ucsb.edu/~william/data/liar_dataset.zip) | PolitiFact statements (12,800 samples) | 6/3/2-way credibility labels | Auto-downloaded on first run |
 
@@ -79,9 +79,17 @@ python main.py --dataset liar --label-scheme 2way --use-smote --use-bert --bert-
 
 ---
 
-### Fakeddit dataset
+### Fakeddit dataset (requires manual download)
 
-The TSV files are included in the repository under `data/fakeddit/`. Just run:
+The Fakeddit TSV files are too large to include in this repository (train.tsv is 218MB). To use them:
+
+1. Go to https://github.com/entitize/Fakeddit
+2. Click the download link in the README to access the Google Drive folder
+3. Open the `all_samples` folder
+4. Download `all_train.tsv`, `all_validate.tsv`, and `all_test_public.tsv`
+5. Rename them to `train.tsv`, `validate.tsv`, and `test.tsv`
+6. Place them in `data/fakeddit/`
+7. Run:
 
 ```bash
 python main.py --dataset fakeddit --label-scheme 2way --error-analysis
@@ -102,6 +110,7 @@ python main.py --dataset nela --label-scheme 3way
 ### Cross-Dataset Evaluation (main contribution)
 
 This trains on one dataset and tests on another to measure generalization.
+Requires both LIAR (auto-downloads) and Fakeddit TSV files in `data/fakeddit/`.
 
 ```bash
 # Train on LIAR, test on Fakeddit
@@ -184,7 +193,7 @@ political-misinformation-detection/
 ├── requirements.txt             # All Python dependencies
 │
 ├── data/
-│   ├── fakeddit/                # Fakeddit TSV files (included in repo)
+│   ├── fakeddit/                # Place downloaded Fakeddit TSV files here
 │   ├── nela/                    # NELA-GT data files (included in repo)
 │   ├── liar/                    # LIAR files (auto-downloaded on first run)
 │   ├── sample_data.py           # Generates synthetic data for testing

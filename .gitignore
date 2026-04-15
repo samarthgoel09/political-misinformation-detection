@@ -20,6 +20,8 @@ env/
 Thumbs.db
 
 # Data files (large files - download separately)
+data/fakeddit/*.tsv
+data/liar/
 data/nela/*.db
 data/nela/*.json
 data/nela/articles/
@@ -32,6 +34,7 @@ data/*.csv
 *.docx
 
 # Generated results (re-generate with pipeline)
+results/
 
 # Model checkpoints
 results/bert_model/
