@@ -12,14 +12,11 @@ import pandas as pd
 def apply_smote(X_train, y_train, random_state: int = 42):
     """
     Oversample minority classes on the TF-IDF training matrix using SMOTE.
-
     SMOTE requires imbalanced-learn: pip install imbalanced-learn
-
     Args:
         X_train: Sparse TF-IDF matrix for training.
         y_train: Training labels.
         random_state: Random seed.
-
     Returns:
         Tuple of (resampled X_train, resampled y_train).
     """
@@ -124,7 +121,7 @@ def extract_tfidf_features(
         "y_train": y_train,
         "y_val": y_val,
         "y_test": y_test,
-        "X_test_raw": X_test,   # original text strings — used for error analysis
+        "X_test_raw": X_test,  
         "label_names_train": ln_train,
         "label_names_test": ln_test,
         "label_names_val": ln_val,

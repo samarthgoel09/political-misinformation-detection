@@ -1,8 +1,3 @@
-"""
-Political Misinformation Detection — Main Pipeline
-End-to-end runner: data loading → preprocessing → feature extraction → model training → evaluation.
-"""
-
 import argparse
 import os
 import sys
@@ -10,7 +5,6 @@ import warnings
 
 warnings.filterwarnings("ignore")
 
-# Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from data.sample_data import generate_sample_data
@@ -51,7 +45,7 @@ def load_data(args):
         )
 
         if fakeddit_data:
-            # Combine train/val/test into one (we re-split later with TF-IDF)
+            # Combine train/val/test into one
             import pandas as pd
             dfs = list(fakeddit_data.values())
             df = pd.concat(dfs, ignore_index=True)
@@ -107,7 +101,7 @@ def run_baseline_pipeline(df, args):
         use_smote=args.use_smote,
     )
 
-    # Train models (with optional hyperparameter tuning)
+    # Train models
     if args.tune:
         trained_models = tune_all_models(features["X_train"], features["y_train"])
     else:
@@ -162,14 +156,13 @@ def run_bert_pipeline(df, args):
     from sklearn.model_selection import train_test_split
     import numpy as np
 
-    # Use raw text (BERT has its own tokenizer)
     texts = df["text"].to_numpy(dtype=str)
     labels = df["label_id"].to_numpy(dtype=int)
     id_to_label = df.drop_duplicates("label_id").set_index("label_id")["label"].to_dict()
     label_names = [id_to_label[i] for i in range(len(id_to_label))]
     num_labels = len(label_names)
 
-    # Split data
+    # Splitting data
     X_train, X_temp, y_train, y_temp = train_test_split(
         texts, labels, test_size=0.3, random_state=42, stratify=labels
     )
@@ -179,7 +172,7 @@ def run_bert_pipeline(df, args):
 
     print(f"Train: {len(X_train)}, Val: {len(X_val)}, Test: {len(X_test)}")
 
-    # Limit samples for BERT if dataset is large
+    # Limiting samples for BERT if dataset is large
     max_bert_samples = args.bert_max_samples
     if len(X_train) > max_bert_samples:
         indices = np.random.RandomState(42).choice(
@@ -196,11 +189,14 @@ def run_bert_pipeline(df, args):
         num_epochs=args.bert_epochs,
         max_length=args.bert_max_length,
         use_class_weights=not args.bert_no_class_weight,
+        early_stopping_patience=args.bert_early_stopping,
+        lr_schedule=args.bert_lr_schedule,
+        gradient_accumulation_steps=args.bert_grad_accum,
     )
 
     history = bert.train(X_train, y_train, X_val, y_val)
 
-    # Evaluate on test set
+    # Evaluating on test set
     y_pred = bert.predict(X_test)
 
     metrics = compute_metrics(y_test, y_pred, label_names)
@@ -278,8 +274,8 @@ def main():
     # BERT arguments
     parser.add_argument("--use-bert", action="store_true",
                         help="Also train DistilBERT model")
-    parser.add_argument("--bert-epochs", type=int, default=3,
-                        help="Number of BERT training epochs")
+    parser.add_argument("--bert-epochs", type=int, default=5,
+                        help="Number of BERT training epochs (early stopping will stop early if val F1 plateaus)")
     parser.add_argument("--bert-batch-size", type=int, default=32,
                         help="BERT batch size")
     parser.add_argument("--bert-max-length", type=int, default=128,
@@ -288,6 +284,25 @@ def main():
                         help="Max samples for BERT training")
     parser.add_argument("--bert-no-class-weight", action="store_true",
                         help="Disable class weighting in BERT loss (not recommended for 6-way)")
+    parser.add_argument("--bert-early-stopping", type=int, default=2,
+                        help="Early stopping patience in epochs on val F1 macro (0 = disabled)")
+    parser.add_argument("--bert-lr-schedule", type=str, default="cosine",
+                        choices=["cosine", "linear"],
+                        help="Learning rate schedule for BERT training")
+    parser.add_argument("--bert-grad-accum", type=int, default=1,
+                        help="Gradient accumulation steps for BERT (effective batch = batch_size * grad_accum)")
+
+    # Cross-dataset evaluation arguments
+    parser.add_argument("--cross-dataset", action="store_true",
+                        help="Run cross-dataset generalization evaluation (LIAR <-> Fakeddit)")
+    parser.add_argument("--source-dataset", type=str, default="liar",
+                        choices=["liar", "fakeddit"],
+                        help="Dataset to train on for cross-dataset eval")
+    parser.add_argument("--target-dataset", type=str, default="fakeddit",
+                        choices=["liar", "fakeddit"],
+                        help="Dataset to test on for cross-dataset eval")
+    parser.add_argument("--bidirectional", action="store_true",
+                        help="Run cross-dataset eval in both directions (LIAR->Fakeddit and Fakeddit->LIAR)")
 
     # Output arguments
     parser.add_argument("--results-dir", type=str, default="results",
@@ -299,7 +314,7 @@ def main():
 
     args = parser.parse_args()
 
-    # Ensure results directory exists
+    # checking if directory exists
     os.makedirs(args.results_dir, exist_ok=True)
 
     print("\n" + "=" * 60)
@@ -316,16 +331,94 @@ def main():
     print(f"  Bias Analysis: {'Yes' if args.bias_analysis else 'No'}")
     print("=" * 60)
 
-    # Load data
+    # Loading data
     df = load_data(args)
 
-    # Run baseline pipeline
+    # Running baseline pipeline
     baseline_metrics = run_baseline_pipeline(df, args)
 
-    # Run BERT pipeline (optional)
+    # Running BERT pipeline
     bert_metrics = {}
     if args.use_bert:
         bert_metrics = run_bert_pipeline(df, args)
+
+    # Cross-dataset evaluation
+    if args.cross_dataset:
+        print("\n" + "=" * 60)
+        print("  CROSS-DATASET EVALUATION")
+        print("=" * 60)
+        from src.cross_dataset_eval import (
+            run_cross_dataset_evaluation,
+            run_bidirectional_cross_dataset,
+        )
+
+        # Load LIAR
+        from data.download_liar import load_liar
+        liar_df = load_liar(label_scheme="2way", max_samples=args.n_samples)
+
+        if args.bidirectional:
+            if args.dataset == "fakeddit":
+                fakeddit_df = df
+            else:
+                from data.download_fakeddit import load_fakeddit
+                import pandas as pd
+                fakeddit_data = load_fakeddit(
+                    data_dir=args.fakeddit_dir,
+                    label_scheme="2way",
+                    filter_political=True,
+                    max_samples=args.n_samples,
+                )
+                fakeddit_df = pd.concat(fakeddit_data.values(), ignore_index=True) if fakeddit_data else None
+
+            if fakeddit_df is not None and len(fakeddit_df) > 0:
+                run_bidirectional_cross_dataset(
+                    liar_df=liar_df,
+                    fakeddit_df=fakeddit_df,
+                    max_features=args.max_features,
+                    results_dir=args.results_dir,
+                )
+            else:
+                print("Warning: Could not load Fakeddit data for bidirectional eval. "
+                      "Place TSV files in data/fakeddit/ and retry.")
+        else:
+            # Single direction: source -> target
+            source_name = args.source_dataset.capitalize()
+            target_name = args.target_dataset.capitalize()
+
+            if args.source_dataset == "liar":
+                source_df = liar_df
+                from data.download_fakeddit import load_fakeddit
+                import pandas as pd
+                fd = load_fakeddit(
+                    data_dir=args.fakeddit_dir,
+                    label_scheme="2way",
+                    filter_political=True,
+                    max_samples=args.n_samples,
+                )
+                target_df = pd.concat(fd.values(), ignore_index=True) if fd else None
+            else:
+                from data.download_fakeddit import load_fakeddit
+                import pandas as pd
+                fd = load_fakeddit(
+                    data_dir=args.fakeddit_dir,
+                    label_scheme="2way",
+                    filter_political=True,
+                    max_samples=args.n_samples,
+                )
+                source_df = pd.concat(fd.values(), ignore_index=True) if fd else None
+                target_df = liar_df
+
+            if source_df is not None and target_df is not None:
+                run_cross_dataset_evaluation(
+                    source_df=source_df,
+                    target_df=target_df,
+                    source_name=source_name,
+                    target_name=target_name,
+                    max_features=args.max_features,
+                    results_dir=args.results_dir,
+                )
+            else:
+                print("Warning: Could not load both datasets for cross-dataset eval.")
 
     # Combined comparison
     if bert_metrics:

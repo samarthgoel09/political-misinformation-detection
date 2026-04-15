@@ -2,7 +2,6 @@
 Baseline classification models.
 Trains and evaluates Logistic Regression, Naive Bayes, and SVM classifiers.
 """
-
 import time
 import numpy as np
 from sklearn.linear_model import LogisticRegression
@@ -14,11 +13,9 @@ from sklearn.calibration import CalibratedClassifierCV
 def get_models(class_weight: str = "balanced") -> dict:
     """
     Return a dictionary of baseline models to train.
-
     Args:
         class_weight: Weighting scheme for imbalanced classes. Use 'balanced'
             for 6-way classification, or None to disable.
-
     Returns:
         Dictionary mapping model name to sklearn estimator.
     """
@@ -56,20 +53,18 @@ def _compute_sample_weights(y_train: np.ndarray) -> np.ndarray:
 def train_model(model, X_train, y_train, model_name: str = "Model"):
     """
     Train a single model and return it with training time.
-
     Args:
         model: sklearn estimator.
         X_train: Training feature matrix.
         y_train: Training labels.
         model_name: Name for logging.
-
     Returns:
         Tuple of (trained model, training time in seconds).
     """
     print(f"\nTraining {model_name}...")
     start = time.time()
 
-    # MultinomialNB doesn't support class_weight — use sample_weight instead
+    # MultinomialNB doesn't support class_weight using sample_weight instead
     if isinstance(model, MultinomialNB):
         sample_weights = _compute_sample_weights(y_train)
         model.fit(X_train, y_train, sample_weight=sample_weights)
